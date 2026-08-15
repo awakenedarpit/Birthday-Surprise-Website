@@ -121,8 +121,19 @@ async function createOnlineSurprise(){
       const blob=await (await fetch(p.data)).blob();
       const ext=blob.type==="image/png"?"png":"jpg";
       const path=`${shareToken}/${crypto.randomUUID()}.${ext}`;
-      const {error}=await sb.storage.from(cfg.STORAGE_BUCKET).upload(path,blob,{contentType:blob.type,upsert:false});
-      if(error)throw new Error(`Photo upload failed: ${error.message}`);
+      const form = new FormData();
+      form.append("file", blob, path.split("/").pop());
+      const uploadUrl = `${cfg.SUPABASE_URL}/storage/v1/object/${encodeURIComponent(cfg.STORAGE_BUCKET)}/${path.split("/").map(encodeURIComponent).join("/")}`;
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "apikey": cfg.SUPABASE_PUBLISHABLE_KEY },
+        body: form
+      });
+      if(!uploadRes.ok){
+        let uploadError = {};
+        try { uploadError = await uploadRes.json(); } catch {}
+        throw new Error(`Photo upload failed: ${uploadError.message || uploadError.error || uploadRes.statusText}`);
+      }
       uploaded.push({path,caption:p.caption||""});
     }
 
@@ -140,7 +151,7 @@ async function createOnlineSurprise(){
 
     const res=await fetch(functionUrl(cfg.CREATE_FUNCTION),{
       method:"POST",
-      headers:{"Content-Type":"application/json","apikey":cfg.SUPABASE_PUBLISHABLE_KEY,"Authorization":`Bearer ${cfg.SUPABASE_PUBLISHABLE_KEY}`},
+      headers:{"Content-Type":"application/json","apikey":cfg.SUPABASE_PUBLISHABLE_KEY},
       body:JSON.stringify(payload)
     });
     const out=await res.json();
@@ -163,7 +174,7 @@ async function loadShared(){
   try{
     const res=await fetch(functionUrl(cfg.GET_FUNCTION),{
       method:"POST",
-      headers:{"Content-Type":"application/json","apikey":cfg.SUPABASE_PUBLISHABLE_KEY,"Authorization":`Bearer ${cfg.SUPABASE_PUBLISHABLE_KEY}`},
+      headers:{"Content-Type":"application/json","apikey":cfg.SUPABASE_PUBLISHABLE_KEY},
       body:JSON.stringify({share_token:token})
     });
     const out=await res.json();
