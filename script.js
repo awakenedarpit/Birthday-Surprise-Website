@@ -13,7 +13,7 @@ const saveDraft=()=>localStorage.setItem("birthdaySurpriseDraft",JSON.stringify(
 const toast=(m)=>{const t=$("#toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2800)};
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 const randomToken=()=>{const a=new Uint8Array(24);crypto.getRandomValues(a);return [...a].map(x=>x.toString(16).padStart(2,"0")).join("")};
-const functionUrl=name=>`${cfg.SUPABASE_URL}/functions/v1/${name}`;
+const functionUrl=name=>`${cfg.SUPABASE_URL.replace(/\/$/,"").replace(/\/rest\/v1$/,"")}/functions/v1/${name}`;
 
 function progress(){ $("#progress").innerHTML=[1,2,3,4,5].map(i=>`<span class="dot ${i<=step?"active":""}">${i<=step?"🎈":"⚪"}</span>`).join("") }
 function stepLabel(){ $("#stepLabel").textContent=["🎈  Step 1 of 5 · The Star","🍰  Step 2 of 5 · The Cake","🎈  Step 3 of 5 · The Balloons","📸  Step 4 of 5 · The Memories","💌  Step 5 of 5 · The Letter"][step-1] }
@@ -121,50 +121,23 @@ async function createOnlineSurprise(){
       const blob=await (await fetch(p.data)).blob();
       const ext=blob.type==="image/png"?"png":"jpg";
       const path=`${shareToken}/${crypto.randomUUID()}.${ext}`;
-      const form = new FormData();
-      form.append("file", blob, path.split("/").pop());
-      const uploadUrl = `${cfg.SUPABASE_URL}/storage/v1/object/${encodeURIComponent(cfg.STORAGE_BUCKET)}/${path.split("/").map(encodeURIComponent).join("/")}`;
-      const uploadRes = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "apikey": cfg.SUPABASE_PUBLISHABLE_KEY },
-        body: form
-      });
-      if(!uploadRes.ok){
-        let uploadError = {};
-        try { uploadError = await uploadRes.json(); } catch {}
-        throw new Error(`Photo upload failed: ${uploadError.message || uploadError.error || uploadRes.statusText}`);
-      }
+      const form=new FormData();
+      form.append("file",blob,path.split("/").pop());
+      const uploadUrl=`${cfg.SUPABASE_URL.replace(/\/$/,"").replace(/\/rest\/v1$/,"")}/storage/v1/object/${encodeURIComponent(cfg.STORAGE_BUCKET)}/${path.split("/").map(encodeURIComponent).join("/")}`;
+      const uploadRes=await fetch(uploadUrl,{method:"POST",headers:{"apikey":cfg.SUPABASE_PUBLISHABLE_KEY},body:form});
+      if(!uploadRes.ok){let uploadError={};try{uploadError=await uploadRes.json()}catch{}throw new Error(`Photo upload failed: ${uploadError.message||uploadError.error||uploadRes.statusText}`)}
       uploaded.push({path,caption:p.caption||""});
     }
-
-    const payload={
-      share_token:shareToken,
-      birthday_person:state.name.trim(),
-      creator_name:state.yourName.trim()||null,
-      age:state.age?Number(state.age):null,
-      birthday:(state.day&&state.month)?`${new Date().getFullYear()}-${String(state.month).padStart(2,"0")}-${String(state.day).padStart(2,"0")}`:null,
-      cake:state.cake,
-      reasons:state.reasons.filter(Boolean),
-      photos:uploaded,
-      letter:state.letter.trim()
-    };
-
-    const res=await fetch(functionUrl(cfg.CREATE_FUNCTION),{
-      method:"POST",
-      headers:{"Content-Type":"application/json","apikey":cfg.SUPABASE_PUBLISHABLE_KEY},
-      body:JSON.stringify(payload)
-    });
+    const payload={share_token:shareToken,birthday_person:state.name.trim(),creator_name:state.yourName.trim()||null,age:state.age?Number(state.age):null,birthday:(state.day&&state.month)?`${new Date().getFullYear()}-${String(state.month).padStart(2,"0")}-${String(state.day).padStart(2,"0")}`:null,cake:state.cake,reasons:state.reasons.filter(Boolean),photos:uploaded,letter:state.letter.trim()};
+    const res=await fetch(functionUrl(cfg.CREATE_FUNCTION),{method:"POST",headers:{"Content-Type":"application/json","apikey":cfg.SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
     const out=await res.json();
     if(!res.ok)throw new Error(out.error||"The server couldn't save your surprise.");
-
     const url=`${location.origin}/s/${shareToken}`;
-    c.innerHTML=`<section class="preview-screen"><div class="celebrate">🎁</div><h2>Your surprise is ready!</h2><p>Anyone with this link can open the birthday experience.</p><input id="shareUrl" value="${esc(url)}" readonly><button class="primary" id="copyLink">Copy shareable link 🔗</button><button class="secondary" id="openLink">Open surprise</button></section>`;
+    $("#previewContent").innerHTML=`<section class="preview-screen"><div class="celebrate">🎁</div><h2>Your surprise is ready!</h2><p>Anyone with this link can open the birthday experience.</p><input id="shareUrl" value="${esc(url)}" readonly><button class="primary" id="copyLink">Copy shareable link 🔗</button><button class="secondary" id="openLink">Open surprise</button></section>`;
     $("#copyLink").onclick=async()=>{await navigator.clipboard.writeText(url);toast("Link copied! 🎉")};
     $("#openLink").onclick=()=>location.href=url;
     localStorage.removeItem("birthdaySurpriseDraft");
-  }catch(e){
-    console.error(e);toast(e.message||"Couldn't save the surprise.");btn.disabled=false;btn.textContent="☁️ Create shareable link";
-  }
+  }catch(e){console.error(e);toast(e.message||"Couldn't save the surprise.");btn.disabled=false;btn.textContent="☁️ Create shareable link"}
 }
 
 async function loadShared(){
@@ -172,21 +145,15 @@ async function loadShared(){
   if(!token)return;
   if(!hasConfig){$("#previewContent").innerHTML=`<section class="preview-screen"><div class="error-box"><h2>Supabase isn't configured</h2><p>Add your project URL and publishable key to <code>supabase-config.js</code>.</p></div></section>`;return}
   try{
-    const res=await fetch(functionUrl(cfg.GET_FUNCTION),{
-      method:"POST",
-      headers:{"Content-Type":"application/json","apikey":cfg.SUPABASE_PUBLISHABLE_KEY},
-      body:JSON.stringify({share_token:token})
-    });
+    const res=await fetch(functionUrl(cfg.GET_FUNCTION),{method:"POST",headers:{"Content-Type":"application/json","apikey":cfg.SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify({share_token:token})});
     const out=await res.json();
     if(!res.ok)throw new Error(out.error||"Surprise not found.");
     sharedData=out.surprise;isShared=true;renderSharedStages();
-  }catch(e){
-    $("#previewContent").innerHTML=`<section class="preview-screen"><div class="error-box"><h2>Oops 💔</h2><p>${esc(e.message)}</p></div></section>`;
-  }
+  }catch(e){$("#previewContent").innerHTML=`<section class="preview-screen"><div class="error-box"><h2>Oops 💔</h2><p>${esc(e.message)}</p></div></section>`}
 }
 
 function renderSharedStages(){
-  const d=sharedData;const photos=d.photos||[];const reasons=d.reasons||[];
+  const d=sharedData,photos=d.photos||[],reasons=d.reasons||[];
   if(previewIndex===0)$("#previewContent").innerHTML=`<section class="preview-screen"><h2>A walk down memory lane</h2><p>Swipe through 📸</p><div class="memory-line"></div><div class="polaroids">${photos.length?photos.map(p=>`<figure class="polaroid"><img src="${p.url}" alt=""><figcaption>${esc(p.caption||"💛")}</figcaption></figure>`).join(""):`<figure class="polaroid" style="display:grid;place-items:center;height:390px"><div style="font-size:100px">💛</div><figcaption>A memory waiting to be made</figcaption></figure>`}</div><button class="primary keep" id="sharedKeep">Keep going ✨</button></section>`;
   if(previewIndex===1)$("#previewContent").innerHTML=`<section class="preview-screen"><h2>For all the little things 🎈</h2><p>Pop each balloon to reveal a reason.</p><div class="balloon-show">${reasons.map((r,i)=>`<button class="big-balloon" data-shared-pop="${i}">🎈</button>`).join("")}</div><div id="reasonReveal"></div><button class="primary keep" id="sharedKeep">Keep going ✨</button></section>`;
   if(previewIndex===2)$("#previewContent").innerHTML=`<section class="preview-screen"><div class="letter-card"><h3>Dear ${esc(d.birthday_person)},</h3><div class="letter-text">${esc(d.letter||"You deserve the happiest birthday.")}</div><div class="signature">With all my love,<br>— ${esc(d.creator_name||"Someone special")}</div></div><button class="primary keep" id="sharedKeep">Continue</button></section>`;
@@ -200,6 +167,4 @@ function confetti(){const box=document.createElement("div");box.className="confe
 $("#soundBtn").onclick=()=>{soundOn=!soundOn;$("#soundBtn").textContent=soundOn?"🔊":"🔇";$("#soundBtn2").textContent=soundOn?"🔊":"🔇"};
 $("#soundBtn2").onclick=()=>$("#soundBtn").click();
 
-if(location.pathname.startsWith("/s/")){
-  isShared=true;$("#setupView").classList.add("hidden");$("#previewView").classList.remove("hidden");previewIndex=0;renderPreview();
-}else render();
+if(location.pathname.startsWith("/s/")){isShared=true;$("#setupView").classList.add("hidden");$("#previewView").classList.remove("hidden");previewIndex=0;renderPreview()}else render();
