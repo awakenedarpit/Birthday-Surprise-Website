@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/s/:token", "destination": "/index.html" },
+    { "source": "/((?!.*\\.).*)", "destination": "/index.html" }
+  ]
+}
