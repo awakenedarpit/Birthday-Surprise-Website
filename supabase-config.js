@@ -4,8 +4,8 @@
 // NEVER paste a service_role/secret key here.
 
 window.APP_CONFIG = {
-  SUPABASE_URL: "https://YOUR_PROJECT_REF.supabase.co",
-  SUPABASE_PUBLISHABLE_KEY: "YOUR_PUBLISHABLE_OR_ANON_KEY",
+  SUPABASE_URL: https://lxfgnajjxxqedazmzfjw.supabase.co/rest/v1/",
+  SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xMNnLut6Ubg2Etj9XE6NgA_bWcv-Nvf",
   CREATE_FUNCTION: "create-surprise",
   GET_FUNCTION: "get-surprise",
   STORAGE_BUCKET: "birthday-photos"
